@@ -1,105 +1,79 @@
 import streamlit as st
 import os
-import subprocess
+import yt_dlp
 import shutil
-import sys
 from zipfile import ZipFile
 
-# --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Mi spotdl Web", page_icon="🎵", layout="centered")
-
-# --- FUNCIÓN CRÍTICA PARA SERVIDORES NUBE ---
-def inicializar_sistema():
-    """Asegura que spotdl y yt-dlp estén instalados y listos."""
-    try:
-        import spotdl
-    except ImportError:
-        with st.spinner("Instalando motores de descarga en el servidor..."):
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "spotdl", "yt-dlp"])
-            st.rerun()
-
-inicializar_sistema()
-
-# --- INTERFAZ ---
-st.title("🎵 Descargador Personal de Playlist")
-st.markdown("---")
+# --- CONFIGURACIÓN E INTERFAZ ---
+st.set_page_config(page_title="Media Downloader Pro", page_icon="📥")
+st.title("📥 Multi-Source Downloader")
+st.markdown("Descarga desde **YouTube, YT Music, Spotify (vía YT)** y más.")
 
 # --- SEGURIDAD ---
-# ⚠️ CAMBIA ESTO POR TU PROPIA CONTRASEÑA ⚠️
-PASSWORD_CORRECTA = "mi_clave_secreta" 
+PASSWORD_CORRECTA = "radd" # <--- CAMBIA ESTO
 
 with st.sidebar:
     st.header("Seguridad")
-    pass_input = st.text_input("Contraseña de acceso:", type="password")
-    st.info("Esta herramienta es de uso privado.")
+    pass_input = st.text_input("Contraseña:", type="password")
 
 if pass_input == PASSWORD_CORRECTA:
-    st.success("Acceso concedido")
-    playlist_url = st.text_input("Pega la URL de Spotify (Playlist, Álbum o Canción):", 
-                                placeholder="https://open.spotify.com/playlist/...")
-
-    if st.button("🚀 Iniciar Descarga"):
-        if not playlist_url:
-            st.warning("Por favor, introduce una URL válida.")
+    url = st.text_input("Pega el enlace (Playlist o Video):")
+    formato = st.selectbox("Formato de salida:", ["mp3", "m4a", "wav"])
+    
+    if st.button("🚀 Iniciar Procesamiento"):
+        if not url:
+            st.warning("Por favor, pega una URL válida.")
         else:
-            output_folder = "downloads_temp"
-            zip_path = "mi_musica.zip"
-
-            # Limpiar descargas anteriores para no llenar el disco del servidor
-            if os.path.exists(output_folder):
-                shutil.rmtree(output_folder)
-            if os.path.exists(zip_path):
-                os.remove(zip_path)
+            download_path = "downloads"
+            zip_name = "descarga_total.zip"
             
-            os.makedirs(output_folder)
+            # Limpieza
+            if os.path.exists(download_path): shutil.rmtree(download_path)
+            if os.path.exists(zip_name): os.remove(zip_name)
+            os.makedirs(download_path)
 
-            with st.status("Procesando descarga...", expanded=True) as status:
-                st.write("Conectando con Spotify y buscando en YouTube...")
-                
-                # Ejecución robusta usando el ejecutable actual de Python
-                comando = [
-                    sys.executable, "-m", "spotdl", 
-                    "download", playlist_url, 
-                    "--output", output_folder,
-                    "--format", "mp3"
-                ]
-                
-                # Ejecutar y capturar logs
-                process = subprocess.run(comando, capture_output=True, text=True)
+            with st.status("Analizando y descargando...", expanded=True) as status:
+                # Configuración de yt-dlp
+                ydl_opts = {
+                    'format': 'bestaudio/best',
+                    'outtmpl': f'{download_path}/%(title)s.%(ext)s',
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': formato,
+                        'preferredquality': '192',
+                    }],
+                    'noplaylist': False, # Permitir playlists
+                }
 
-                if process.returncode == 0:
-                    st.write("Comprimiendo archivos...")
-                    archivos = os.listdir(output_folder)
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        st.write("📥 Descargando archivos al servidor...")
+                        ydl.download([url])
                     
+                    # Comprimir resultados
+                    st.write("📦 Creando paquete ZIP...")
+                    archivos = os.listdir(download_path)
                     if archivos:
-                        with ZipFile(zip_path, 'w') as zipf:
-                            for root, dirs, files in os.walk(output_folder):
+                        with ZipFile(zip_name, 'w') as zipf:
+                            for root, dirs, files in os.walk(download_path):
                                 for file in files:
                                     zipf.write(os.path.join(root, file), file)
                         
-                        status.update(label="✅ ¡Descarga completada!", state="complete", expanded=False)
+                        status.update(label="✅ ¡Todo listo!", state="complete")
                         st.balloons()
                         
-                        # Botón final de descarga al PC del usuario
-                        with open(zip_path, "rb") as f:
+                        with open(zip_name, "rb") as f:
                             st.download_button(
-                                label="💾 Descargar todo en un archivo .ZIP",
+                                label=f"💾 Descargar {len(archivos)} archivos (.zip)",
                                 data=f,
-                                file_name="musica_descargada.zip",
+                                file_name="mis_descargas.zip",
                                 mime="application/zip"
                             )
                     else:
-                        status.update(label="❌ No se descargó nada.", state="error")
-                        st.error("No se encontraron canciones. Verifica que la playlist sea pública.")
-                else:
-                    status.update(label="❌ Error en el proceso.", state="error")
-                    st.error("Detalle del error:")
-                    st.code(process.stderr)
-
+                        st.error("No se descargó ningún archivo. Verifica el link.")
+                        
+                except Exception as e:
+                    status.update(label="❌ Error crítico", state="error")
+                    st.error(f"Detalles: {str(e)}")
 else:
-    if pass_input:
-        st.error("Contraseña incorrecta")
-    st.warning("Por favor, introduce la contraseña en el menú lateral para usar la herramienta.")
-
-st.markdown("---")
-st.caption("SpotDL Web UI | Basado en Python & Streamlit")
+    st.info("Introduce la contraseña para desbloquear la herramienta.")
