@@ -4,56 +4,78 @@ import subprocess
 import shutil
 from zipfile import ZipFile
 
+# Configuración de la página
 st.set_page_config(page_title="Mi spotdl Web", page_icon="🎵")
 
 st.title("🎵 Descargador de Playlist Personal")
+st.markdown("---")
 
-# --- SEGURIDAD SIMPLE ---
-password = st.sidebar.text_input("Contraseña de acceso", type="password")
+# --- SEGURIDAD ---
+# Cambia "mi_clave_secreta" por la palabra que tú quieras
+PASSWORD_CORRECTA = "radd" 
 
-if password == "radd": # Cambia esto por tu contraseña personal
-    playlist_url = st.text_input("Pega la URL de Spotify:")
+with st.sidebar:
+    st.header("Configuración")
+    pass_input = st.text_input("Introduce la contraseña:", type="password")
+
+if pass_input == PASSWORD_CORRECTA:
+    playlist_url = st.text_input("Pega la URL de Spotify (Playlist o Canción):", placeholder="https://open.spotify.com/playlist/...")
     
-    if st.button("Iniciar descarga"):
+    if st.button("🚀 Iniciar Descarga"):
         if playlist_url:
             output_folder = "descargas_temp"
+            zip_path = "mis_canciones.zip"
             
-            # Limpiar carpetas previas si existen
+            # Limpieza previa de archivos viejos
             if os.path.exists(output_folder):
                 shutil.rmtree(output_folder)
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+            
             os.makedirs(output_folder)
 
-            with st.spinner("Descargando... esto puede tardar varios minutos dependiendo del tamaño."):
+            with st.spinner("Descargando y procesando... esto puede tardar unos minutos."):
                 try:
-                    # Ejecutamos spotdl como proceso del sistema
-                    # Usamos --format mp3 para asegurar compatibilidad
-                    command = f'spotdl "{playlist_url}" --output "{output_folder}"'
+                    # Usamos 'python -m spotdl' para evitar el error de 'command not found'
+                    # Añadimos --format mp3 por defecto
+                    command = f'python -m spotdl download "{playlist_url}" --output "{output_folder}"'
+                    
+                    # Ejecutamos el comando y capturamos la salida
                     result = subprocess.run(command, shell=True, capture_output=True, text=True)
                     
                     if result.returncode == 0:
-                        # Crear un archivo ZIP con todas las canciones
-                        zip_path = "playlist_descargada.zip"
-                        with ZipFile(zip_path, 'w') as zipf:
-                            for root, dirs, files in os.walk(output_folder):
-                                for file in files:
-                                    zipf.write(os.path.join(root, file), file)
-                        
-                        st.success("¡Descarga finalizada con éxito!")
-                        
-                        # Botón para que descargues el ZIP a tu PC
-                        with open(zip_path, "rb") as f:
-                            st.download_button(
-                                label="💾 Descargar ZIP con mi música",
-                                data=f,
-                                file_name="mis_canciones.zip",
-                                mime="application/zip"
-                            )
+                        # Crear el archivo ZIP
+                        archivos = os.listdir(output_folder)
+                        if archivos:
+                            with ZipFile(zip_path, 'w') as zipf:
+                                for root, dirs, files in os.walk(output_folder):
+                                    for file in files:
+                                        zipf.write(os.path.join(root, file), file)
+                            
+                            st.success(f"✅ ¡Hecho! Se descargaron {len(archivos)} canciones.")
+                            
+                            # Botón de descarga
+                            with open(zip_path, "rb") as f:
+                                st.download_button(
+                                    label="💾 Descargar mis archivos (.zip)",
+                                    data=f,
+                                    file_name="musica_spotify.zip",
+                                    mime="application/zip"
+                                )
+                        else:
+                            st.error("No se encontraron archivos descargados. Revisa el link.")
                     else:
-                        st.error(f"Error en spotdl: {result.stderr}")
+                        st.error("Error al ejecutar spotdl:")
+                        st.code(result.stderr)
                 
                 except Exception as e:
-                    st.error(f"Ocurrió un error inesperado: {e}")
+                    st.error(f"Error inesperado: {str(e)}")
         else:
-            st.warning("Por favor, introduce una URL válida.")
+            st.warning("Escribe una URL primero.")
 else:
-    st.info("Introduce la contraseña en la barra lateral para usar la herramienta.")
+    if pass_input:
+        st.error("❌ Contraseña incorrecta")
+    st.info("Escribe la contraseña en el menú lateral para desbloquear.")
+
+st.markdown("---")
+st.caption("Uso personal - Desarrollado con Streamlit + spotdl")
