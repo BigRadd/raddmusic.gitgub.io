@@ -11,7 +11,7 @@ st.title("🎵 Descargador de Playlist Personal")
 # --- SEGURIDAD SIMPLE ---
 password = st.sidebar.text_input("Contraseña de acceso", type="password")
 
-if password == "TU_CLAVE_AQUI": # Cambia esto por tu contraseña personal
+if password == "radd": # Cambia esto por tu contraseña personal
     playlist_url = st.text_input("Pega la URL de Spotify:")
     
     if st.button("Iniciar descarga"):
