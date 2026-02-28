@@ -1,3 +1,2 @@
 streamlit
-spotdl
 yt-dlp
